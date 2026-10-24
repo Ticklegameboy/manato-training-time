@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>真斗のトレーニングタイム</title><meta name="description" content="真斗のトレーニングに、ちょっといたずら。ドット絵アニメーションで楽しむ縦画面ブラウザゲーム。日本語・繁體中文・English対応。"><link rel="stylesheet" href="style.css?v=manato-shell-v18"></head>
+<body><main>
+<canvas id="game" width="512" height="800" role="img" aria-label="真斗遊戲"></canvas>
+<section id="bootScreen" class="boot-screen" aria-label="遊戲開始畫面">
+ <div class="screen-corners" aria-hidden="true"></div>
+ <header class="boot-heading"><span class="mode-label" id="modeLabel">鍛鍊時間</span><h1 id="titleLabel">真斗</h1><p id="subtitleLabel">兄弟，陪我練一組。</p></header>
+ <div id="loadPanel" class="load-panel">
+  <div class="runner-lane"><img id="runner" alt="" draggable="false"></div>
+  <div class="load-caption"><span id="loadLabel">熱身中</span><span id="loadPercent">0%</span></div>
+  <div id="loadMeter" class="load-track" role="progressbar" aria-label="熱身中" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="loadFill"></div></div>
+ </div>
+ <div class="start-slot"><button id="start" class="pixel-action" disabled hidden><span aria-hidden="true" class="play-icon">▶</span><span id="startLabel">開始遊戲</span><span class="button-tail" aria-hidden="true">»</span></button><button id="retry" class="pixel-action" hidden>重新載入</button><p id="startHint" hidden>點擊或按住滑動，試試他的反應。</p></div>
+ <nav class="language-picker" aria-label="語言"><span id="languageLabel">語言</span><div><button id="langZh" lang="zh-Hant" aria-pressed="true">繁體中文</button><button id="langJa" lang="ja" aria-pressed="false">日本語</button><button id="langEn" lang="en" aria-pressed="false">ENGLISH</button></div></nav>
+</section>
+<section id="endingScreen" class="ending-screen" hidden><button id="again" class="pixel-action"><span aria-hidden="true">↻</span><span id="againLabel">重新開始</span><span class="button-tail" aria-hidden="true">»</span></button></section>
+</main>
+<canvas id="pixelTransition" hidden aria-hidden="true"></canvas>
+<div hidden inert aria-hidden="true"><div id="intro"></div><div id="winPanel"></div><button id="watch"></button><div id="speech"></div><div id="toast"></div><span id="resultTime"></span><span id="resultHits"></span><span id="resultCombo"></span><span id="staminaText"></span><div class="meter"><div id="staminaFill"></div></div><span id="clock"></span><span id="combo"></span><span id="status"></span></div>
+<script src="manato-assets.js?v=manato-shell-v18"></script><script src="manato-locales.js?v=manato-shell-v18"></script><script src="manato-dialogue.js?v=manato-shell-v18"></script><script src="manato-screens.js?v=manato-shell-v18"></script><script src="manato-transition.js?v=manato-shell-v18"></script><script src="game.js?v=manato-shell-v18"></script></body></html>
