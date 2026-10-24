@@ -1,6 +1,6 @@
 'use strict';
 window.createManatoBgm=function({base='assets/manato-bgm-v1/'}={}){
- const levels={opening:.24,gameplay:.10,ending:.20},tracks=new Map();
+ const levels={opening:.36,gameplay:.10,ending:.20},tracks=new Map();
  let context=null,enabled=true,muted=false,paused=false,scene=null,error=null,lastState=null,waitingForGesture=false;
  const button=document.getElementById('musicToggle'),credits=document.getElementById('musicCredits');
  function load(){
