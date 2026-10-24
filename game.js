@@ -285,7 +285,9 @@ function hit(x,y){if(state!=='playing'||paused||transition.active||elapsed-lastI
  const zone=hitZone(x,y);
  if(!zone){misses++;return false;}
  combo=elapsed-lastHit<1.15?combo+1:1;bestCombo=Math.max(bestCombo,combo);lastHit=elapsed;hits++;
- lastDamage=Math.min(stamina,hitDamage*zone.multiplier);lastZone=zone.id;
+ // Use pre-hit stamina bands, independent of animation transition or recovery pose.
+ const damageScale=stamina<exhaustedThreshold ? .5 : stamina>=hangThreshold&&stamina<suppressThreshold ? 2/3 : 1;
+ lastDamage=Math.min(stamina,hitDamage*zone.multiplier*damageScale);lastZone=zone.id;
  if(zone.multiplier===2)criticalHits++;
  stamina=Math.max(0,stamina-lastDamage);
  spark(x,y,zone.multiplier===2);syncStaminaState();speech.hit(mode,zone.id,elapsed);
