@@ -189,11 +189,12 @@ function advanceAnimation(dt){
  }
 }
 function reset(){
+ window.GameAnalytics?.start();
  clearPointer();endingTime=0;screens.play();
  renderMode='normal';motion='pulling';blend=null;bottomTime=0;
  criticalHits=0;lastDamage=0;lastZone=null;
  state='playing';stamina=maxStamina;elapsed=phase=combo=bestCombo=hits=misses=0;lastHit=lastInput=-100;mode='normal';pose=0;locked=false;laughClock=dropTime=0;paused=false;hitEffects=[];$('intro').classList.add('hidden');$('winPanel').classList.add('hidden');$('toast').classList.remove('show');speech.reset(visual());updateHud();}
-function finish(){clearPointer();blend=null;motion='release';state='dropping';mode='release';dropTime=0;stamina=0;speech.finish(elapsed);toast('體力耗盡');}
+function finish(){window.GameAnalytics?.end();clearPointer();blend=null;motion='release';state='dropping';mode='release';dropTime=0;stamina=0;speech.finish(elapsed);toast('體力耗盡');}
 function showWin(){state='won';endingTime=0;screens.ending();$('resultTime').textContent=elapsed.toFixed(1)+'s';$('resultHits').textContent=hits;$('resultCombo').textContent=bestCombo;$('winPanel').classList.remove('hidden');$('speech').textContent='呼……你贏啦。';}
 // Pixel feedback is emitted only by a successful damage adjudication.
 const pixelGlyphs={
@@ -329,8 +330,8 @@ function draw(){
  if(state==='won'){screens.end(ctx,images,endingTime);}
  else{drawHitEffects();speech.draw(ctx);drawStamina();}
 }
-function loop(t){const dt=Math.min((t-last)/1000||0,.05);last=t;if(transition.active){draw();if(!paused)transition.step(dt);}else{update(dt);draw();}requestAnimationFrame(loop);}
-function load(name){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>{loadedAssets++;resolve(im);};im.onerror=()=>reject(new Error('Asset load failed: '+name));im.src=name;});}
+function loop(t){window.GameAnalytics?.tick((t-last)/1000,state==='playing'&&!paused&&!transition.active);const dt=Math.min((t-last)/1000||0,.05);last=t;if(transition.active){draw();if(!paused)transition.step(dt);}else{update(dt);draw();}requestAnimationFrame(loop);}
+function load(name){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>{loadedAssets++;resolve(im);};im.onerror=()=>{const error=new Error('Asset load failed: '+name);error.assetURL=name;reject(error);};im.src=name;});}
 async function init(){
  requestAnimationFrame(loop);screens.loading(0,0,false,false);
  try{
@@ -342,8 +343,8 @@ async function init(){
    Promise.all(artwork.runnerFrames.map(load)).then(frames=>images.runner=frames),
    ...Object.entries(artwork.groups).map(async([key,group])=>{images[key]=await Promise.all(group.frames.map(load));})
   ]);
-  assetsReady=true;
- }catch(e){loadError=true;console.error(e);}
+  assetsReady=true;window.GameAnalytics?.loadComplete();
+ }catch(e){loadError=true;window.GameAnalytics?.loadFailed(e.assetURL);console.error(e);}
 }
 $('start').onclick=()=>{if(state==='ready'&&assetsReady&&bootTime>=3)transition.start(reset);};
 $('again').onclick=()=>{if(state==='won')transition.start(reset);};$('watch').onclick=()=>$('winPanel').classList.add('hidden');
