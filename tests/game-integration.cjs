@@ -42,7 +42,7 @@ function collect(o){return Array.isArray(o)?o:typeof o==='object'?Object.entries
  for(const lang of ['en','ja']){window.MANATO_I18N.set(lang);for(const source of lines){const text=window.MANATO_I18N.translate(source);assert.ok(text&&text!==source,lang+': '+source);const wrapped=window.MANATO_I18N.lines(text,13.75,222);assert.ok(wrapped.length<=4);for(const line of wrapped)assert.ok(window.MANATO_I18N.width(line,13.75)<=222,lang+': '+line);}}
  node('langEn').onclick();node('start').onclick();assert.equal(status().state,'ready');assert.equal(status().transition.active,true);advance(.4);assert.equal(status().state,'ready');node('start').onclick();advance(.12);assert.equal(status().state,'playing');assert.equal(status().transition.committed,true);assert.equal(status().elapsed,0);advance(.62);assert.equal(status().transition.active,false);assert.equal(node('pixelTransition').hidden,true);assert.equal(node('bootScreen').hidden,true);advance(.1);assert.equal(status().speech.floats[0].text,'Feeling good today.');
 
- assert.equal(status().bgm.scene,'gameplay');assert.equal(status().bgm.tracks.gameplay.target,.045);assert.equal(status().voice.ready,true);assert.equal(status().voice.active,'pullup');
+ assert.equal(status().bgm.scene,'gameplay');assert.ok(Math.abs(status().bgm.tracks.gameplay.target-.0225)<1e-9);assert.equal(status().voice.ready,true);assert.equal(status().voice.active,'pullup');
  const n0=status().voice.scheduled;advance(9.56);assert.equal(status().voice.scheduled,n0,'Normal has no restarts over four complete repetitions');
  window.qaHit(0,0);advance(.1);assert.equal(status().voice.kind,'normal','Miss does not trigger laugh');
  const p=status().hotspots[0];window.qaHit(p.x,p.y);advance(.2);assert.equal(status().voice.kind,'suppress');

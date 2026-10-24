@@ -1,6 +1,6 @@
 'use strict';
 window.createManatoBgm=function({base='assets/manato-bgm-v1/'}={}){
- const levels={opening:.36,gameplay:.05,ending:.20},tracks=new Map();
+ const levels={opening:.50,gameplay:.025,ending:.20},tracks=new Map();
  let context=null,enabled=true,muted=false,paused=false,scene=null,error=null,lastState=null,waitingForGesture=false;
  const button=document.getElementById('musicToggle'),credits=document.getElementById('musicCredits');
  function load(){
@@ -56,8 +56,9 @@ window.createManatoBgm=function({base='assets/manato-bgm-v1/'}={}){
   if(!enabled||muted||paused||s.paused||waitingForGesture||context.state!=='running')return;
   const t=tracks.get(scene);if(!t)return;t.stopAt=null;play(t);
   const vocal=!!s.voiceActive;
-  // Keep gameplay music beneath breath and laughter; transitions briefly dip too.
-  const target=(scene==='gameplay'?(vocal?.045:levels.gameplay):levels[scene])*(s.transition?.45:1);
+  // Scale ducking with the scene level so voice playback cannot bypass volume changes.
+  const voiceMultiplier=scene==='gameplay'&&vocal?.9:1;
+  const target=levels[scene]*voiceMultiplier*(s.transition?.45:1);
   ramp(t,target,target<t.to?.12:.65);
  }
  function pause(){paused=true;for(const t of tracks.values())t.audio.pause();context?.suspend().catch(()=>{});}
