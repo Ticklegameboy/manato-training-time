@@ -9,9 +9,19 @@ const total=durations.reduce((a,b)=>a+b,0), images={normal:[],moving:[],suppress
 const artwork=window.MANATO_ASSETS;
 const screens=window.createManatoScreens(canvas,artwork);
 const transition=window.createPixelTransition();
+const voice=window.createManatoVoice();
+const sfx=window.createManatoSfx();
+const bgm=window.createManatoBgm();
 let assetsReady=false,loadError=false,loadedAssets=0,bootTime=0;
 const assetCount=3+Object.values(artwork.groups).reduce((n,g)=>n+g.frames.length,0)+(artwork.endingLoop?.length||0)+(artwork.runnerFrames?.length||0);
-const maxStamina=200,suppressThreshold=maxStamina*.85,hangThreshold=maxStamina*.65,exhaustedThreshold=maxStamina*.35,breathDelay=1,hitDamage=.875,recoveryRate=2.4,recoveryAcceleration=4,maxRecoveryRate=20;
+const maxStamina=200,suppressThreshold=maxStamina*.85,hangThreshold=maxStamina*.65,exhaustedThreshold=maxStamina*.35,breathDelay=1,hitDamage=.875,recoveryRate=2.4,recoveryAcceleration=4,maxRecoveryRate=10;
+const discoveredThresholds=new Set();
+try{const saved=JSON.parse(window.localStorage?.getItem('manato.discovered-thresholds.v1')||'[]');if(Array.isArray(saved))for(const value of saved)if([85,65,35].includes(value))discoveredThresholds.add(value);}catch{}
+function discoverThresholds(){
+ let changed=false;
+ for(const percent of [85,65,35])if(stamina<maxStamina*percent/100&&!discoveredThresholds.has(percent)){discoveredThresholds.add(percent);changed=true;}
+ if(changed)try{window.localStorage?.setItem('manato.discovered-thresholds.v1',JSON.stringify([...discoveredThresholds]));}catch{}
+}
 // A held contact equals four ordinary taps per second, regardless of move-event frequency.
 const holdInterval=.25;
 // All interaction coordinates follow the selected character artwork.
@@ -69,6 +79,7 @@ function reactionMode(){
 function syncStaminaState(){
  locked=stamina<hangThreshold;
  setMode(reactionMode());
+ if(state==='playing')discoverThresholds();
 }
 function toast(text){$('toast').textContent=text;$('toast').classList.add('show');toastUntil=elapsed+1.4;}
 function poseAt(ms){let t=((ms%total)+total)%total;for(let i=0;i<durations.length;i++){if(t<durations[i])return order[i];t-=durations[i];}return 0;}
@@ -190,6 +201,7 @@ function advanceAnimation(dt){
 }
 function reset(){
  window.GameAnalytics?.start();
+ voice.reset();
  clearPointer();endingTime=0;screens.play();
  renderMode='normal';motion='pulling';blend=null;bottomTime=0;
  criticalHits=0;lastDamage=0;lastZone=null;
@@ -243,20 +255,31 @@ function drawHitEffects(){
 }
 function staminaBand(value=stamina){return value>=suppressThreshold?0:value>=hangThreshold?1:value>=exhaustedThreshold?2:3;}
 function drawStamina(){
- // Upper-left margin ends at x=80, leaving the central ears unobstructed.
- const colors=['#f5df51','#ff9850','#ff526c','#c481ff'],color=colors[staminaBand()];
- ctx.fillStyle='#090c10';ctx.beginPath();ctx.moveTo(6,7);ctx.lineTo(80,7);ctx.lineTo(80,34);ctx.lineTo(73,41);ctx.lineTo(6,41);ctx.closePath();ctx.fill();
- ctx.fillStyle=color;ctx.fillRect(6,7,3,29);ctx.fillRect(10,7,70,1);
+ // Keep the same upper-left origin and width; dialogue is painted above this HUD.
+ const colors=['#e2f654','#ffa34b','#ff526c','#bc75f5'],color=colors[staminaBand()];
+ ctx.save();ctx.globalAlpha=1;
+ ctx.fillStyle='#090c10';ctx.beginPath();ctx.moveTo(6,7);ctx.lineTo(80,7);ctx.lineTo(80,26);ctx.lineTo(73,33);ctx.lineTo(6,33);ctx.closePath();ctx.fill();
+ ctx.fillStyle=color;ctx.fillRect(6,7,2,26);ctx.fillRect(9,7,71,1);
  ctx.font=window.MANATO_I18N.language==='en'?'bold 5px sans-serif':'bold 7px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';ctx.fillStyle='#f3f1e8';ctx.fillText(window.MANATO_I18N.ui('stamina'),14,12);
  const n=Math.max(0,Math.min(maxStamina,Math.ceil(stamina)));
  pixelText(String(n).padStart(3,'0'),41,12,'#f3f1e8');pixelText('/200',55,12,'#92969a');
- ctx.fillStyle='#33353c';ctx.fillRect(14,24,58,7);
- const width=Math.round(58*Math.max(0,Math.min(1,stamina/maxStamina)));
- ctx.fillStyle=color;ctx.fillRect(14,24,width,7);ctx.fillStyle='#ffffff';ctx.globalAlpha=.45;ctx.fillRect(14,24,width,1);ctx.globalAlpha=1;
- // Fixed threshold notches make a stage change easy to read in both directions.
- ctx.fillStyle='#090c10';for(const ratio of [.35,.65,.85])ctx.fillRect(14+Math.round(58*ratio),24,1,7);
- for(let i=0;i<4;i++){ctx.fillStyle=i===staminaBand()?color:'#45454c';ctx.fillRect(14+i*7,35,5,2);}
- ctx.fillStyle=color;ctx.fillRect(64,35,6,1);ctx.fillRect(62,37,6,1);
+ // Slanted continuous health rail, with a bright leading edge and dark underside.
+ const width=Math.round(62*Math.max(0,Math.min(1,stamina/maxStamina)));
+ for(let y=0;y<8;y++){
+  const x=12+Math.floor((7-y)/2);
+  ctx.fillStyle='#30353b';ctx.fillRect(x,22+y,62,1);
+  ctx.fillStyle=color;ctx.fillRect(x,22+y,width,1);
+  if(width>0){ctx.fillStyle='#f6ffc7';ctx.globalAlpha=.7;ctx.fillRect(x+width-1,22+y,1,1);ctx.globalAlpha=1;}
+ }
+ ctx.fillStyle='#fff';ctx.globalAlpha=.35;ctx.fillRect(15,22,width,1);
+ ctx.fillStyle='#000';ctx.globalAlpha=.25;ctx.fillRect(12,29,62,1);ctx.globalAlpha=1;
+ // Learned thresholds remain visible on filled and depleted portions of the rail.
+ for(const percent of discoveredThresholds){
+  const mark=Math.round(62*percent/100);
+  for(let y=0;y<8;y++){const x=12+Math.floor((7-y)/2)+mark;ctx.fillStyle='#090c10';ctx.fillRect(x-1,22+y,3,1);ctx.fillStyle='#f4f1cf';ctx.fillRect(x,22+y,1,1);}
+ }
+ if(stamina<exhaustedThreshold){ctx.fillStyle=color;ctx.globalAlpha=.12+.13*(1+Math.sin(elapsed*6))/2;ctx.fillRect(10,20,68,1);}
+ ctx.restore();
 }
 function hit(x,y){if(state!=='playing'||paused||transition.active||elapsed-lastInput<.085)return false;lastInput=elapsed;
  const zone=hitZone(x,y);
@@ -273,6 +296,7 @@ function clearPointer(){const id=pointer?.id;pointer=null;if(id!==undefined&&can
 function pointerPoint(e){const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)/r.width*256,y:viewTop+(e.clientY-r.top)/r.height*viewHeight};}
 canvas.addEventListener('pointerdown',e=>{
  if(state!=='playing'||paused||transition.active||pointer||e.isPrimary===false||(e.button!==undefined&&e.button!==0))return;
+ voice.unlock();
  e.preventDefault();pointer={id:e.pointerId,...pointerPoint(e),contactTime:0,hasContact:false};
  try{canvas.setPointerCapture(e.pointerId);}catch{}
  const active=pointer;active.hasContact=hit(active.x,active.y);
@@ -284,8 +308,8 @@ canvas.addEventListener('pointermove',e=>{
  if(!hitZone(pointer.x,pointer.y)){pointer.contactTime=0;pointer.hasContact=false;}
 });
 for(const type of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(type,e=>{if(pointer&&e.pointerId===pointer.id){if(pointer.hasContact)lastHit=elapsed;clearPointer();}});
-window.addEventListener('blur',()=>{clearPointer();paused=true;});
-window.addEventListener('focus',()=>{paused=!!document.hidden;});
+window.addEventListener('blur',()=>{clearPointer();paused=true;voice.pause();sfx.pause();bgm.pause();});
+window.addEventListener('focus',()=>{paused=!!document.hidden;if(!paused&&['playing','dropping'].includes(state))voice.unlock();sfx.resume();bgm.resume();});
 function updateHeldInput(dt){
  if(!pointer)return;
  if(!hitZone(pointer.x,pointer.y)){pointer.contactTime=0;pointer.hasContact=false;return;}
@@ -328,14 +352,17 @@ function draw(){
  }else paint(ctx,visual());
  ctx.globalAlpha=1;
  if(state==='won'){screens.end(ctx,images,endingTime);}
- else{drawHitEffects();speech.draw(ctx);drawStamina();}
+ else{drawHitEffects();drawStamina();speech.draw(ctx);}
 }
-function loop(t){window.GameAnalytics?.tick((t-last)/1000,state==='playing'&&!paused&&!transition.active);const dt=Math.min((t-last)/1000||0,.05);last=t;if(transition.active){draw();if(!paused)transition.step(dt);}else{update(dt);draw();}requestAnimationFrame(loop);}
+function loop(t){window.GameAnalytics?.tick((t-last)/1000,state==='playing'&&!paused&&!transition.active);const dt=Math.min((t-last)/1000||0,.05);last=t;if(transition.active){draw();if(!paused)transition.step(dt);}else{update(dt);draw();}sfx.updateTransition(transition.snapshot());voice.update({state,mode,renderMode,motion,phase,cycleMs:total,blending:!!blend,paused:paused||transition.active});bgm.update({state,paused,transition:transition.active,voiceActive:!!voice.snapshot().active});requestAnimationFrame(loop);}
 function load(name){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>{loadedAssets++;resolve(im);};im.onerror=()=>{const error=new Error('Asset load failed: '+name);error.assetURL=name;reject(error);};im.src=name;});}
 async function init(){
+ bgm.load();
  requestAnimationFrame(loop);screens.loading(0,0,false,false);
  try{
   await Promise.all([
+   voice.load(),
+   sfx.load(),
    load(artwork.background).then(im=>images.bg=im),
    load(artwork.ending).then(im=>images.ending=im),
    load(artwork.loadingBackground).then(im=>images.loading=im),
@@ -346,11 +373,10 @@ async function init(){
   assetsReady=true;window.GameAnalytics?.loadComplete();
  }catch(e){loadError=true;window.GameAnalytics?.loadFailed(e.assetURL);console.error(e);}
 }
-$('start').onclick=()=>{if(state==='ready'&&assetsReady&&bootTime>=3)transition.start(reset);};
-$('again').onclick=()=>{if(state==='won')transition.start(reset);};$('watch').onclick=()=>$('winPanel').classList.add('hidden');
-document.addEventListener('visibilitychange',()=>{if(document.hidden)clearPointer();paused=!!document.hidden;});
+$('start').onclick=()=>{if(state==='ready'&&assetsReady&&bootTime>=3){voice.unlock();bgm.unlock();transition.start(reset);}};
+$('again').onclick=()=>{if(state==='won'){voice.unlock();bgm.unlock();transition.start(reset);}};$('watch').onclick=()=>$('winPanel').classList.add('hidden');
+document.addEventListener('visibilitychange',()=>{if(document.hidden){clearPointer();voice.pause();sfx.pause();bgm.pause();}paused=!!document.hidden;if(!paused){if(['playing','dropping'].includes(state))voice.unlock();sfx.resume();bgm.resume();}});
 // Read-only state for local QA and support; gameplay always goes through pointer input.
-Object.defineProperty(window,'gameStatus',{get:()=>({state,mode,stamina,maxStamina,screen:screens.snapshot(),transition:transition.snapshot(),staminaPercent:stamina/maxStamina*100,elapsed,locked,pose,hits,misses,criticalHits,lastDamage,lastZone,combo,bestCombo,paused,holding:!!pointer,feedback:hitEffects.map(fx=>({...fx})),staminaBand:staminaBand(),endingVisible:state==='won'&&endingTime>0,speech:speech.snapshot(),animation:{renderMode,motion,phase,blending:!!blend,blendProgress:blend?blend.time/blend.duration:1,blendKind:blend?.kind||null,direction:blend?.direction||(pullModes.has(renderMode)?pullTrajectory().direction:0)},visual:visual(),hotspots:activeGeometry().hotspots.map(([x,y])=>({x,y})),regions:activeGeometry().regions.map(p=>p.map(([x,y])=>[x,y])),hitZones:(activeGeometry().zones||[]).map(z=>({id:z.id,multiplier:z.multiplier,polygon:z.polygon.map(([x,y])=>[x,y]),probe:z.probe?.slice()}))})});
+Object.defineProperty(window,'gameStatus',{get:()=>({state,mode,stamina,maxStamina,screen:screens.snapshot(),transition:transition.snapshot(),staminaPercent:stamina/maxStamina*100,elapsed,locked,pose,hits,misses,criticalHits,lastDamage,lastZone,combo,bestCombo,paused,holding:!!pointer,feedback:hitEffects.map(fx=>({...fx})),staminaBand:staminaBand(),discoveredThresholds:[...discoveredThresholds].sort((a,b)=>b-a),endingVisible:state==='won'&&endingTime>0,speech:speech.snapshot(),voice:voice.snapshot(),sfx:sfx.snapshot(),bgm:bgm.snapshot(),animation:{renderMode,motion,phase,blending:!!blend,blendProgress:blend?blend.time/blend.duration:1,blendKind:blend?.kind||null,direction:blend?.direction||(pullModes.has(renderMode)?pullTrajectory().direction:0)},visual:visual(),hotspots:activeGeometry().hotspots.map(([x,y])=>({x,y})),regions:activeGeometry().regions.map(p=>p.map(([x,y])=>[x,y])),hitZones:(activeGeometry().zones||[]).map(z=>({id:z.id,multiplier:z.multiplier,polygon:z.polygon.map(([x,y])=>[x,y]),probe:z.probe?.slice()}))})});
 init();
 })();
-

@@ -12,7 +12,7 @@ window.createManatoScreens=function(canvas,artwork){
  }
  for(const [id,lang] of [['langZh','zh-Hant'],['langJa','ja'],['langEn','en']])$(id).onclick=()=>i18n.set(lang);
  i18n.onChange(labels);labels();
- $('retry').onclick=()=>window.location.reload();
+ $('retry').onclick=()=>window.setTimeout(()=>window.location.reload(),140);
  function loading(value,time,done,failed){
   progress=value;complete=done;error=failed;
   $('loadFill').style.width=(value*100)+'%';$('loadPercent').textContent=Math.floor(value*100)+'%';

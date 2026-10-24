@@ -32,5 +32,5 @@ window.createPixelTransition=function(){
   if(!committed&&time>=commitAt){committed=true;commit();}
   if(time>=end){active=false;canvas.hidden=true;main.inert=false;commit=null;ctx.clearRect(0,0,canvas.width,canvas.height);}
  }
- return {start,step,get active(){return active;},snapshot:()=>({active,time,committed})};
+ return {start,step,get active(){return active;},snapshot:()=>({active,time,committed,reduced})};
 };
