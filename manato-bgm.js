@@ -8,7 +8,7 @@ window.createManatoBgm=function({base='assets/manato-bgm-v1/'}={}){
   try{
    const C=window.AudioContext||window.webkitAudioContext;if(!C)throw Error('Web Audio unavailable');context=new C();
    for(const name of Object.keys(levels)){
-    const audio=new Audio(base+name+'.mp3');audio.loop=true;audio.preload='metadata';
+    const audio=new Audio(base+name+'.mp3');audio.loop=true;audio.preload='none';
     const source=context.createMediaElementSource(audio),gain=context.createGain();gain.gain.value=0;source.connect(gain);gain.connect(context.destination);
     const track={audio,gain,from:0,to:0,start:0,end:0,stopAt:null,started:false,pending:false};tracks.set(name,track);
     audio.addEventListener('error',()=>{error='Music load failed: '+name;});

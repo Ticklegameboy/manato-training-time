@@ -18,4 +18,12 @@
 </main>
 <canvas id="pixelTransition" hidden aria-hidden="true"></canvas>
 <div hidden inert aria-hidden="true"><div id="intro"></div><div id="winPanel"></div><button id="watch"></button><div id="speech"></div><div id="toast"></div><span id="resultTime"></span><span id="resultHits"></span><span id="resultCombo"></span><span id="staminaText"></span><div class="meter"><div id="staminaFill"></div></div><span id="clock"></span><span id="combo"></span><span id="status"></span></div>
-<script src="manato-assets.js?v=manato-shell-v18"></script><script src="manato-locales.js?v=manato-shell-v18"></script><script src="manato-dialogue.js?v=manato-shell-v18"></script><script src="manato-screens.js?v=audio-v3"></script><script src="manato-transition.js?v=audio-v3"></script><script src="manato-voice.js?v=voice-v3"></script><script src="manato-sfx.js?v=sfx-v1"></script><script src="manato-bgm.js?v=bgm-v3"></script><script src="analytics-config.js?v=manato-v19"></script><script src="analytics.js?v=manato-v19"></script><script src="game.js?v=stage-defense-v1"></script></body></html>
+<script>
+// Still offer a way out when a required script cannot arrive or execute.
+(function(){
+ function unavailable(){var retry=document.getElementById('retry');retry.hidden=false;retry.textContent='重新載入 / Retry';retry.onclick=function(){window.location.reload();};document.getElementById('loadLabel').textContent='載入中斷，請重試 / Loading interrupted';}
+ window.addEventListener('error',function(e){if((e.target&&e.target.tagName==='SCRIPT')||!window.gameStatus)unavailable();},true);
+ window.setTimeout(function(){if(!window.gameStatus)unavailable();},30000);
+})();
+</script>
+<script src="manato-loader.js?v=loading-v1"></script><script src="manato-assets.js?v=manato-shell-v18"></script><script src="manato-locales.js?v=manato-shell-v18"></script><script src="manato-dialogue.js?v=manato-shell-v18"></script><script src="manato-screens.js?v=audio-v3"></script><script src="manato-transition.js?v=audio-v3"></script><script src="manato-voice.js?v=loading-v1"></script><script src="manato-sfx.js?v=loading-v1"></script><script src="manato-bgm.js?v=loading-v1"></script><script src="analytics-config.js?v=manato-v19"></script><script src="analytics.js?v=manato-v19"></script><script src="game.js?v=loading-v1"></script></body></html>

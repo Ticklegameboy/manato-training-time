@@ -13,7 +13,7 @@ const voice=window.createManatoVoice();
 const sfx=window.createManatoSfx();
 const bgm=window.createManatoBgm();
 let assetsReady=false,loadError=false,loadedAssets=0,bootTime=0;
-const assetCount=3+Object.values(artwork.groups).reduce((n,g)=>n+g.frames.length,0)+(artwork.endingLoop?.length||0)+(artwork.runnerFrames?.length||0);
+const assetCount=new Set([artwork.background,artwork.ending,artwork.loadingBackground,...artwork.endingLoop,...artwork.runnerFrames,...Object.values(artwork.groups).flatMap(g=>g.frames)]).size;
 const maxStamina=200,suppressThreshold=maxStamina*.85,hangThreshold=maxStamina*.65,exhaustedThreshold=maxStamina*.35,breathDelay=1,hitDamage=.875,recoveryRate=2.4,recoveryAcceleration=4,maxRecoveryRate=10;
 const discoveredThresholds=new Set();
 try{const saved=JSON.parse(window.localStorage?.getItem('manato.discovered-thresholds.v1')||'[]');if(Array.isArray(saved))for(const value of saved)if([85,65,35].includes(value))discoveredThresholds.add(value);}catch{}
@@ -357,28 +357,42 @@ function draw(){
  else{drawHitEffects();drawStamina();speech.draw(ctx);}
 }
 function loop(t){window.GameAnalytics?.tick((t-last)/1000,state==='playing'&&!paused&&!transition.active);const dt=Math.min((t-last)/1000||0,.05);last=t;if(transition.active){draw();if(!paused)transition.step(dt);}else{update(dt);draw();}sfx.updateTransition(transition.snapshot());voice.update({state,mode,renderMode,motion,phase,cycleMs:total,blending:!!blend,paused:paused||transition.active});bgm.update({state,paused,transition:transition.active,voiceActive:!!voice.snapshot().active});requestAnimationFrame(loop);}
-function load(name){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>{loadedAssets++;resolve(im);};im.onerror=()=>{const error=new Error('Asset load failed: '+name);error.assetURL=name;reject(error);};im.src=name;});}
-async function init(){
- bgm.load();
- requestAnimationFrame(loop);screens.loading(0,0,false,false);
- try{
-  await Promise.all([
-   voice.load(),
-   sfx.load(),
-   load(artwork.background).then(im=>images.bg=im),
-   load(artwork.ending).then(im=>images.ending=im),
+const loadedImages=new Map();let loadingPromise=null;
+function load(name){
+ if(loadedImages.has(name))return Promise.resolve(loadedImages.get(name));
+ return window.ManatoLoader.image(name).then(im=>{if(!loadedImages.has(name)){loadedImages.set(name,im);loadedAssets++;}return im;});
+}
+function loadAssets(){
+ if(loadingPromise)return loadingPromise;
+ loadError=false;
+ loadingPromise=(async()=>{
+  // Opening artwork comes first. Audio is optional and never gates START.
+  const tasks=[
    load(artwork.loadingBackground).then(im=>images.loading=im),
-   Promise.all(artwork.endingLoop.map(load)).then(frames=>images.endingLoop=frames),
-   Promise.all(artwork.runnerFrames.map(load)).then(frames=>images.runner=frames),
-   ...Object.entries(artwork.groups).map(async([key,group])=>{images[key]=await Promise.all(group.frames.map(load));})
-  ]);
-  assetsReady=true;window.GameAnalytics?.loadComplete();
- }catch(e){loadError=true;window.GameAnalytics?.loadFailed(e.assetURL);console.error(e);}
+   ...artwork.runnerFrames.map((url,i)=>load(url).then(im=>(images.runner??=[])[i]=im)),
+   load(artwork.background).then(im=>images.bg=im),
+   ...Object.entries(artwork.groups).flatMap(([key,group])=>group.frames.map((url,i)=>load(url).then(im=>(images[key]??=[])[i]=im))),
+   load(artwork.ending).then(im=>images.ending=im),
+   ...artwork.endingLoop.map((url,i)=>load(url).then(im=>(images.endingLoop??=[])[i]=im))
+  ];
+  const results=await Promise.allSettled(tasks),failure=results.find(r=>r.status==='rejected');
+  if(failure){loadError=true;window.GameAnalytics?.loadFailed(failure.reason.assetURL);console.warn(failure.reason);}
+  else{assetsReady=true;window.GameAnalytics?.loadComplete();}
+  // Even partial audio is usable; failed clips can retry after reconnect/gesture.
+  sfx.load();voice.load();
+ })().finally(()=>{loadingPromise=null;});
+ return loadingPromise;
+}
+function init(){
+ bgm.load();requestAnimationFrame(loop);screens.loading(0,0,false,false);
+ $('retry').onclick=()=>{loadAssets();};
+ window.addEventListener('online',()=>{if(!assetsReady)loadAssets();voice.load();sfx.load();});
+ loadAssets();
 }
 $('start').onclick=()=>{if(state==='ready'&&assetsReady&&bootTime>=3){voice.unlock();bgm.unlock();transition.start(reset);}};
 $('again').onclick=()=>{if(state==='won'){voice.unlock();bgm.unlock();transition.start(reset);}};$('watch').onclick=()=>$('winPanel').classList.add('hidden');
 document.addEventListener('visibilitychange',()=>{if(document.hidden){clearPointer();voice.pause();sfx.pause();bgm.pause();}paused=!!document.hidden;if(!paused){if(['playing','dropping'].includes(state))voice.unlock();sfx.resume();bgm.resume();}});
 // Read-only state for local QA and support; gameplay always goes through pointer input.
-Object.defineProperty(window,'gameStatus',{get:()=>({state,mode,stamina,maxStamina,screen:screens.snapshot(),transition:transition.snapshot(),staminaPercent:stamina/maxStamina*100,elapsed,locked,pose,hits,misses,criticalHits,lastDamage,lastZone,combo,bestCombo,paused,holding:!!pointer,feedback:hitEffects.map(fx=>({...fx})),staminaBand:staminaBand(),discoveredThresholds:[...discoveredThresholds].sort((a,b)=>b-a),endingVisible:state==='won'&&endingTime>0,speech:speech.snapshot(),voice:voice.snapshot(),sfx:sfx.snapshot(),bgm:bgm.snapshot(),animation:{renderMode,motion,phase,blending:!!blend,blendProgress:blend?blend.time/blend.duration:1,blendKind:blend?.kind||null,direction:blend?.direction||(pullModes.has(renderMode)?pullTrajectory().direction:0)},visual:visual(),hotspots:activeGeometry().hotspots.map(([x,y])=>({x,y})),regions:activeGeometry().regions.map(p=>p.map(([x,y])=>[x,y])),hitZones:(activeGeometry().zones||[]).map(z=>({id:z.id,multiplier:z.multiplier,polygon:z.polygon.map(([x,y])=>[x,y]),probe:z.probe?.slice()}))})});
+Object.defineProperty(window,'gameStatus',{get:()=>({state,mode,stamina,maxStamina,loading:{ready:assetsReady,failed:loadError,loaded:loadedAssets,total:assetCount},screen:screens.snapshot(),transition:transition.snapshot(),staminaPercent:stamina/maxStamina*100,elapsed,locked,pose,hits,misses,criticalHits,lastDamage,lastZone,combo,bestCombo,paused,holding:!!pointer,feedback:hitEffects.map(fx=>({...fx})),staminaBand:staminaBand(),discoveredThresholds:[...discoveredThresholds].sort((a,b)=>b-a),endingVisible:state==='won'&&endingTime>0,speech:speech.snapshot(),voice:voice.snapshot(),sfx:sfx.snapshot(),bgm:bgm.snapshot(),animation:{renderMode,motion,phase,blending:!!blend,blendProgress:blend?blend.time/blend.duration:1,blendKind:blend?.kind||null,direction:blend?.direction||(pullModes.has(renderMode)?pullTrajectory().direction:0)},visual:visual(),hotspots:activeGeometry().hotspots.map(([x,y])=>({x,y})),regions:activeGeometry().regions.map(p=>p.map(([x,y])=>[x,y])),hitZones:(activeGeometry().zones||[]).map(z=>({id:z.id,multiplier:z.multiplier,polygon:z.polygon.map(([x,y])=>[x,y]),probe:z.probe?.slice()}))})});
 init();
 })();

@@ -6,10 +6,15 @@ window.createManatoSfx=function({base='assets/manato-sfx-v1/'}={}){
  let context=null,promise=null,enabled=false,paused=false,wasActive=false,locked=false,revealed=false;
  const history=[];
  function getContext(){if(!context){const C=window.AudioContext||window.webkitAudioContext;if(!C)return null;context=new C();}return context;}
- function load(){return promise||(promise=(async()=>{
-  try{const c=getContext();if(!c)return false;await Promise.all(names.map(async n=>{const r=await fetch(base+n+'.wav');if(!r.ok)throw Error(n);buffers.set(n,await c.decodeAudioData(await r.arrayBuffer()));}));return true;}
-  catch(e){console.warn('UI audio unavailable:',e);return false;}
- })());}
+ function load(){
+  if(promise)return promise;
+  if(buffers.size===names.length)return Promise.resolve(true);
+  promise=(async()=>{
+   try{const c=getContext();if(!c)return false;
+    await Promise.all(names.filter(n=>!buffers.has(n)).map(async n=>{try{buffers.set(n,await window.ManatoLoader.audio(base+n+'.wav',c));}catch(e){console.warn('UI audio unavailable:',e);}}));return buffers.size===names.length;
+   }catch(e){return false;}
+  })().finally(()=>{promise=null;});return promise;
+ }
  function emit(name,rate=1){
   if(!context||context.state!=='running'||paused||!buffers.has(name))return false;
   const source=context.createBufferSource(),gain=context.createGain();source.buffer=buffers.get(name);
@@ -18,7 +23,7 @@ window.createManatoSfx=function({base='assets/manato-sfx-v1/'}={}){
   active.add(source);source.onended=()=>{active.delete(source);source.disconnect();gain.disconnect();};source.start();
   history.push(name);if(history.length>24)history.shift();return true;
  }
- function click(name){enabled=true;paused=false;const c=getContext();if(!c)return;const resumed=c.resume();Promise.all([resumed,load()]).then(()=>emit(name)).catch(()=>{});}
+ function click(name){enabled=true;paused=false;const c=getContext();if(!c)return;load();c.resume().then(()=>emit(name)).catch(()=>{});}
  // Capture precedes existing handlers, so keyboard and touch activation also work.
  document.addEventListener('click',e=>{const button=e.target.closest?.('button');if(!button||button.disabled||button.hidden||button.closest('[hidden], [inert]'))return;click(['start','again'].includes(button.id)?'confirm':button.id==='retry'?'retry':'select');},true);
  function updateTransition(s){

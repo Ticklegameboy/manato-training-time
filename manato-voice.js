@@ -20,21 +20,21 @@ window.createManatoVoice = function ({base='assets/manato-voice-v1/',extraBase='
  }
  function load(){
   if(loadPromise)return loadPromise;
+  if(buffers.size===names.length)return Promise.resolve(true);
   loadPromise=(async()=>{
    try{
-    const c=getContext();
-    await Promise.all(names.map(async name=>{
-     const response=await fetch((originalNames.includes(name)?base:extraBase)+name+'.wav');
-     if(!response.ok)throw new Error('Voice load failed: '+name);
-     buffers.set(name,await c.decodeAudioData(await response.arrayBuffer()));
-    }));ready=true;return true;
-   }catch(e){error=String(e.message||e);console.warn('Manato voice:',error);return false;}
-  })();return loadPromise;
+    const c=getContext();error=null;
+    await Promise.all(names.filter(name=>!buffers.has(name)).map(async name=>{
+     try{buffers.set(name,await window.ManatoLoader.audio((originalNames.includes(name)?base:extraBase)+name+'.wav',c));ready=true;}
+     catch(e){error=String(e.message||e);console.warn('Manato voice:',error);}
+    }));return buffers.size===names.length;
+   }catch(e){error=String(e.message||e);return false;}
+  })().finally(()=>{loadPromise=null;});return loadPromise;
  }
  function unlock(){
   if(pauseTimer!==null){window.clearTimeout(pauseTimer);pauseTimer=null;}
   try{
-   const c=getContext();unlocked=true;
+   const c=getContext();unlocked=true;load();
    return c.resume().catch(e=>{error=String(e.message||e);});
   }catch(e){error=String(e.message||e);return Promise.resolve();}
  }
@@ -102,6 +102,7 @@ window.createManatoVoice = function ({base='assets/manato-voice-v1/',extraBase='
   const now=context.currentTime;
   rememberAudible();nodes=nodes.filter(n=>n.end>now);
   if(kind==='normal'){
+   if(!buffers.has('pullup'))return;
    const cycle=s.cycleMs/1000,phase=modulo(s.phase/1000,cycle);
    if(normal){
     const actual=modulo(normal.offset+now-normal.at,cycle);
@@ -113,7 +114,7 @@ window.createManatoVoice = function ({base='assets/manato-voice-v1/',extraBase='
    }
    if(!normal)normal=start('pullup',now,phase,true);
   }else if(kind==='breath'){
-   if(!nodes.length)start('breath',now,0,true);
+   if(buffers.has('breath')&&!nodes.length)start('breath',now,0,true);
   }else{
    // Always have the current clip and its successor queued with sample-contiguous times.
    // Selection excludes the actual last audible clip, even if an earlier queue was cancelled.
@@ -121,11 +122,12 @@ window.createManatoVoice = function ({base='assets/manato-voice-v1/',extraBase='
     const previous=nodes.length?nodes.at(-1).name:lastByPool[kind];
     const shortOpener=kind==='laugh'&&openingShort&&nodes.length===0;
     const options=pools[kind].filter(name=>{
-     if(name===previous)return false;
+     if(!buffers.has(name)||name===previous)return false;
      if(shortOpener)return name.startsWith('laugh1-');
      if(kind==='laugh'&&previous?.startsWith('laugh1-'))return name.startsWith('laugh2-');
      return true;
     });
+    if(!options.length)break;
     const pick=options[Math.min(options.length-1,Math.floor(random()*options.length))];
     const at=nodes.length?nodes.at(-1).end:now;
     start(pick,at,0,false,kind);
