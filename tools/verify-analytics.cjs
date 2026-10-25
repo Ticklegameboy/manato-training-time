@@ -25,3 +25,24 @@ console.log(JSON.stringify({passed:true,disabledWithoutId:true,noLocalTracking:t
 
 const wrongPath=harness('G-TEST123'); wrongPath.sandbox.location.pathname='/feather-arcade/'; wrongPath.sandbox.dataLayer=[]; vm.runInContext(source,wrongPath.sandbox); assert.equal(wrongPath.events().length,0);
 const replay=harness('G-TEST123');replay.run('GameAnalytics.start();GameAnalytics.start();GameAnalytics.end();GameAnalytics.start();');assert.equal(replay.events().filter(e=>e[1]==='game_start').length,2);
+// Checkpoints, background/exit, replay and bfcache-like resume keep one cumulative run.
+const runs=harness('G-TEST123');
+const records=()=>runs.events().filter(e=>e[1]==='game_run_record').map(e=>e[2]);
+runs.run('GameAnalytics.start();GameAnalytics.start();for(let n=0;n<65;n++)GameAnalytics.tick(1,true);');
+assert.deepEqual(records().map(r=>r.run_seconds),[30,60]);
+const firstId=records()[0].run_id;assert.ok(firstId.length>10);
+runs.doc.hidden=true;runs.listeners.visibilitychange();runs.listeners.pagehide();
+assert.deepEqual(records().map(r=>r.run_seconds),[30,60,65]);
+runs.run('for(let n=0;n<20;n++)GameAnalytics.tick(1,true);');
+runs.doc.hidden=false;runs.listeners.visibilitychange();
+runs.run('for(let n=0;n<10;n++)GameAnalytics.tick(1,false);for(let n=0;n<5;n++)GameAnalytics.tick(1,true);GameAnalytics.end();GameAnalytics.end();');
+runs.listeners.pagehide();
+assert.equal(records().at(-1).run_seconds,70);assert.equal(records().at(-1).run_status,'completed');
+assert.ok(records().every(r=>r.run_id===firstId));
+assert.ok(records().every(r=>!('value' in r)),'Cumulative records must not inflate additive event value');
+assert.equal(runs.events().filter(e=>e[1]==='game_play_time').reduce((s,e)=>s+e[2].value,0),70);
+runs.run('GameAnalytics.start();for(let n=0;n<120;n++)GameAnalytics.tick(1/60,true);GameAnalytics.tick(NaN,true);GameAnalytics.tick(Infinity,true);GameAnalytics.tick(-1,true);GameAnalytics.end();');
+assert.equal(records().at(-1).run_seconds,2);assert.notEqual(records().at(-1).run_id,firstId);
+const boundary=harness('G-TEST123');boundary.run('GameAnalytics.start();for(let n=0;n<30;n++)GameAnalytics.tick(1,true);GameAnalytics.end();');
+assert.deepEqual(boundary.events().filter(e=>e[1]==='game_run_record').map(e=>e[2].run_status),['checkpoint','completed']);
+console.log('Run duration tests passed: cumulative checkpoints, exit deduplication, pause exclusion, resume, replay IDs, fractional seconds and completed status.');
